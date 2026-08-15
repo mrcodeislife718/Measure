@@ -34,6 +34,9 @@ ingest system
 -> calibrate simulation against reality
 -> Internal Affairs audit
 -> enforce constitutional invariants
+-> synthesize supported claims / limitations / unknowns
+-> select the next experiment by information gain per cost
+-> repeat until evidence is sufficient or fundamentally insufficient
 -> publication gate
 -> later decay, revalidate, or retract the claim
 ```
@@ -75,6 +78,9 @@ The repository contains executable TypeScript for:
 - confidence calibration error
 - metric predictive-validity analysis
 - adaptive next-experiment selection by information gain per cost
+- **closed-loop autonomous evaluator that runs, attacks, replicates, expands, and stops only on an evidence rule**
+- automatic publication blocking on critical audit or replication disagreement
+- explicit stop reasons: evidence sufficient, fundamentally insufficient, budget exhausted, iteration limit, or publication blocked
 - Node 22/24 CI
 
 ## Architecture
@@ -128,6 +134,12 @@ Internal Affairs + Constitutional Invariants
 Evidence Synthesis
     |
     v
+Adaptive Experiment Planner
+    |                ^
+    |                |
+    +--> RUN / ATTACK / REPLICATE / EXPAND --+
+    |
+    v
 Publication Gate
     |
     v
@@ -135,6 +147,27 @@ Post-Publication Decay / Revalidation / Retraction
 ```
 
 The core never asks **how** the participant reasons. The same external contract can evaluate a model-based agent, deterministic program, symbolic system, hybrid architecture, Epiphany, robotics controller, or a future architecture that does not exist yet.
+
+## Closed autonomous evaluation loop
+
+`runAutonomousEvaluation()` is the first orchestration layer that turns Measure from a toolbox into an evaluator that can decide what evidence to gather next.
+
+Each iteration:
+
+```text
+choose highest-value affordable experiment
+-> run it
+-> attack the result
+-> replicate when required
+-> add targeted experiments discovered by red-team/audit logic
+-> update uncertainty and failure evidence
+-> test the publication rule
+-> continue or stop
+```
+
+The loop never treats "more runs" as inherently better. It uses evidence sufficiency, statistical half-width, pass rate, confidence, critical-failure rate, unresolved unknowns, replication agreement, remaining budget, and experiment value to decide whether to continue.
+
+A critical audit finding or material replication disagreement can immediately block publication. If strong evidence cannot be reached because the experiment space, budget, or evidence quality is inadequate, the evaluator returns `inconclusive` rather than manufacturing certainty.
 
 ## 30x environment factory
 
@@ -211,6 +244,7 @@ npm run demo
 ```ts
 import {
   runEvaluation,
+  runAutonomousEvaluation,
   compileOpenApi,
   compileSqlSchema,
   compileWorkflow,
