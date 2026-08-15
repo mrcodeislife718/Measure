@@ -21,4 +21,5 @@ export * from "./operational-world.js";
 export * from "./replay.js";
 export * from "./scenario-synthesis.js";
 export * from "./simulation.js";
+export * from "./source-ingestion.js";
 export * from "./verifier-certification.js";
