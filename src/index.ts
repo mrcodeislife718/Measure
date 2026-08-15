@@ -1,4 +1,5 @@
 export * from "./advanced-evaluation.js";
+export * from "./autonomous-evaluator.js";
 export * from "./benchmark-evaluator.js";
 export * from "./benchmark-validity.js";
 export * from "./confidence.js";
