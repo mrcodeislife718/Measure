@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { Participant, ParticipantContext } from "./contracts.js";
+import type { ParticipantAdapter, ParticipantContext } from "./contracts.js";
 
 export interface HttpParticipantOptions {
   id: string;
@@ -9,7 +9,7 @@ export interface HttpParticipantOptions {
   timeoutMs?: number;
 }
 
-export class HttpParticipant<Observation, Action> implements Participant<Observation, Action> {
+export class HttpParticipant<Observation, Action> implements ParticipantAdapter<Observation, Action> {
   readonly id: string;
   readonly kind: string;
   #url: string;
@@ -53,7 +53,7 @@ export interface CommandParticipantOptions {
   maxOutputBytes?: number;
 }
 
-export class CommandParticipant<Observation, Action> implements Participant<Observation, Action> {
+export class CommandParticipant<Observation, Action> implements ParticipantAdapter<Observation, Action> {
   readonly id: string;
   readonly kind: string;
   #options: CommandParticipantOptions;
@@ -76,9 +76,16 @@ export class CommandParticipant<Observation, Action> implements Participant<Obse
       const maxOutputBytes = this.#options.maxOutputBytes ?? 1_000_000;
       let stdout = Buffer.alloc(0);
       let stderr = Buffer.alloc(0);
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
       const timer = setTimeout(() => {
         child.kill("SIGKILL");
-        reject(new Error(`participant command timed out after ${timeoutMs}ms`));
+        finish(() => reject(new Error(`participant command timed out after ${timeoutMs}ms`)));
       }, timeoutMs);
 
       child.stdout.on("data", (chunk: Buffer) => {
@@ -89,12 +96,8 @@ export class CommandParticipant<Observation, Action> implements Participant<Obse
         stderr = Buffer.concat([stderr, chunk]);
         if (stderr.length > maxOutputBytes) child.kill("SIGKILL");
       });
-      child.on("error", (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
+      child.on("error", (error) => finish(() => reject(error)));
+      child.on("close", (code) => finish(() => {
         if (code !== 0) return reject(new Error(`participant command failed (${code}): ${stderr.toString("utf8").slice(0, 4000)}`));
         if (stdout.length > maxOutputBytes) return reject(new Error("participant command output exceeded limit"));
         try {
@@ -102,7 +105,7 @@ export class CommandParticipant<Observation, Action> implements Participant<Obse
         } catch (error) {
           reject(new Error(`participant command returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`));
         }
-      });
+      }));
 
       child.stdin.end(JSON.stringify({ observation, context }));
     });
