@@ -1,4 +1,4 @@
-import { principal, readJson, stripeRequest, supabase, required } from './_lib/platform.js';
+import { principal, readJson, requireRateLimit, stripeRequest, supabase, required } from './_lib/platform.js';
 
 const PRICE_ENV = {
   pro: 'STRIPE_PRICE_PRO',
@@ -11,6 +11,7 @@ const PRICE_ENV = {
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'method_not_allowed' });
   try {
+    if (!await requireRateLimit(req, res, 'checkout', { limit: 12, windowSeconds: 300 })) return;
     const body = req.method === 'POST' ? await readJson(req, 64_000) : {};
     const plan = String(body.plan ?? req.query?.plan ?? 'audit').toLowerCase();
     if (plan === 'enterprise') {
@@ -20,11 +21,20 @@ export default async function handler(req, res) {
     const priceEnv = PRICE_ENV[plan];
     if (!priceEnv || !process.env[priceEnv]) return res.status(400).json({ error: 'plan_not_configured', plan });
 
+    if (plan === 'audit') {
+      const rows = await supabase('/rest/v1/trust_audits?status=in.(paid,scheduled,running,delivered)&select=id&limit=6');
+      if ((rows?.length ?? 0) >= 5) {
+        return res.status(409).json({ error: 'founding_audits_sold_out', message: 'The first five founding Trust Audits are fully reserved. Contact Measure for the next availability.' });
+      }
+      const email = String(body.email ?? '').trim().toLowerCase();
+      if (!email || !email.includes('@')) return res.status(400).json({ error: 'email_required_for_audit' });
+    }
+
     const appUrl = required('MEASURE_PUBLIC_URL').replace(/\/$/, '');
     const p = await principal(req);
-    let organizationId = p?.organizationId;
+    const organizationId = p?.organizationId;
     let customerId;
-    let customerEmail = p?.type === 'user' ? p.user.email : undefined;
+    const customerEmail = p?.type === 'user' ? p.user.email : undefined;
 
     if (organizationId) {
       const rows = await supabase(`/rest/v1/organizations?id=eq.${organizationId}&select=stripe_customer_id,name&limit=1`);
@@ -48,8 +58,8 @@ export default async function handler(req, res) {
       mode,
       'line_items[0][price]': process.env[priceEnv],
       'line_items[0][quantity]': 1,
-      success_url: `${appUrl}/dashboard.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/?checkout=cancelled`,
+      success_url: plan === 'audit' ? `${appUrl}/audit.html?checkout=success&session_id={CHECKOUT_SESSION_ID}` : `${appUrl}/dashboard.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: plan === 'audit' ? `${appUrl}/audit.html?checkout=cancelled` : `${appUrl}/dashboard.html?checkout=cancelled`,
       allow_promotion_codes: 'true',
       'metadata[measure_plan]': plan,
     };
@@ -63,12 +73,10 @@ export default async function handler(req, res) {
       const email = String(body.email ?? customerEmail ?? '').trim().toLowerCase();
       const systemName = String(body.systemName ?? 'Unnamed system').trim().slice(0, 200);
       const scope = String(body.scope ?? 'Founding Measure Trust Audit').trim().slice(0, 4000);
-      if (email) {
-        await supabase('/rest/v1/trust_audits', {
-          method: 'POST', headers: { Prefer: 'return=minimal' },
-          body: { organization_id: organizationId ?? null, contact_email: email, system_name: systemName, scope, stripe_checkout_session_id: session.id },
-        });
-      }
+      await supabase('/rest/v1/trust_audits', {
+        method: 'POST', headers: { Prefer: 'return=minimal' },
+        body: { organization_id: organizationId ?? null, contact_email: email, system_name: systemName, scope, stripe_checkout_session_id: session.id },
+      });
     }
 
     res.setHeader('Cache-Control', 'no-store');
