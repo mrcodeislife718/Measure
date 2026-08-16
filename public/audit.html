@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Measure Trust Audit</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="nav"><a class="brand" href="/"><span class="mark">M</span>Measure</a><a class="button ghost" href="/dashboard.html">Customer dashboard</a></header>
+    <section class="hero compact">
+      <p class="eyebrow">FOUNDING TRUST AUDIT</p>
+      <h1>Find where your intelligent system stops being trustworthy.</h1>
+      <p class="lede">A hands-on Measure engagement covering environment compilation, scenario generation, adaptive stress testing, counterexample discovery, failure-boundary analysis, evidence review, and a 30-day rerun after remediation.</p>
+      <div class="principle"><strong>Founding price: $5,000 one time.</strong> Limited to the first five design partners because these engagements include direct implementation and review work.</div>
+    </section>
+    <section class="grid two">
+      <article class="panel">
+        <h2>Included</h2>
+        <p>Compiled evaluation environment</p>
+        <p>Private scenario and fault families</p>
+        <p>Failure-boundary and counterexample analysis</p>
+        <p>Authority, reliability, and cost findings</p>
+        <p>Operational trust report with evidence</p>
+        <p>60-minute findings session</p>
+        <p>30-day rerun after fixes</p>
+      </article>
+      <article class="panel">
+        <form id="audit-form" class="stack">
+          <h2>Reserve your audit</h2>
+          <input name="email" type="email" placeholder="Work email" required />
+          <input name="systemName" placeholder="System / agent name" required />
+          <textarea name="scope" rows="8" placeholder="What does the system do, and what do you need to trust it to do?" required></textarea>
+          <label><input type="checkbox" required /> I understand this is a founding paid engagement and Stripe will collect payment securely.</label>
+          <button class="button" type="submit">Continue to secure checkout — $5,000</button>
+          <pre id="audit-result" class="result"></pre>
+        </form>
+      </article>
+    </section>
+  </main>
+  <script type="module" src="/audit.js"></script>
+</body>
+</html>
