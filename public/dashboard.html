@@ -16,22 +16,29 @@
     <section id="auth-card" class="panel">
       <p class="eyebrow">CUSTOMER ACCESS</p>
       <h1>Sign in to Measure</h1>
-      <p>Manage your plan, API keys, usage, and evaluation history.</p>
+      <p>Manage your plan, API keys, usage, team, and evaluation history.</p>
       <div class="grid two">
         <form id="login-form" class="stack">
           <h3>Sign in</h3>
           <input name="email" type="email" placeholder="Email" required />
           <input name="password" type="password" placeholder="Password" required />
           <button class="button" type="submit">Sign in</button>
+          <button class="button ghost" type="button" id="forgot">Forgot password</button>
         </form>
         <form id="register-form" class="stack">
           <h3>Create account</h3>
           <input name="organizationName" placeholder="Company / workspace" />
           <input name="email" type="email" placeholder="Email" required />
           <input name="password" type="password" placeholder="Password (10+ characters)" minlength="10" required />
+          <input name="inviteToken" id="invite-token" type="hidden" />
           <button class="button secondary" type="submit">Create account</button>
         </form>
       </div>
+      <form id="recovery-form" class="stack" hidden>
+        <h3>Set a new password</h3>
+        <input name="password" type="password" minlength="10" placeholder="New password (10+ characters)" required />
+        <button class="button" type="submit">Update password</button>
+      </form>
       <pre id="auth-message" class="result"></pre>
     </section>
 
@@ -63,12 +70,32 @@
           <div id="keys"></div>
         </article>
         <article class="panel">
+          <p class="eyebrow">TEAM</p>
+          <h2>Invite collaborators</h2>
+          <form id="invite-form" class="stack">
+            <input name="email" type="email" placeholder="teammate@company.com" required />
+            <select name="role"><option value="member">Member</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select>
+            <button class="button secondary" type="submit">Create invite</button>
+          </form>
+          <pre id="invite-result" class="result"></pre>
+          <div id="members"></div>
+        </article>
+      </section>
+
+      <section class="grid two">
+        <article class="panel">
           <p class="eyebrow">QUICK START</p>
           <h2>Run an evaluation</h2>
           <pre class="result">curl -X POST "$MEASURE_URL/api/evaluate" \
   -H "Authorization: Bearer $MEASURE_KEY" \
   -H "Content-Type: application/json" \
   -d '{"participantId":"my-system"}'</pre>
+        </article>
+        <article class="panel">
+          <p class="eyebrow">PRIVATE RUNNER</p>
+          <h2>Keep sensitive workloads local</h2>
+          <p>Private and Enterprise plans can run Measure inside customer-controlled infrastructure and upload only the tamper-evident result package.</p>
+          <pre class="result">npm run private-runner -- job.json result.json</pre>
         </article>
       </section>
 
