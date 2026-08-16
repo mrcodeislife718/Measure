@@ -1,9 +1,18 @@
-import { requireApiKey, readJson } from './_auth.js';
+import { meter, requirePrincipal, supabase } from './_lib/platform.js';
+import { readJson } from './_lib/platform.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
-  if (!requireApiKey(req, res)) return;
   try {
+    const principal = await requirePrincipal(req, res);
+    if (!principal) return;
+
+    const orgRows = await supabase(`/rest/v1/organizations?id=eq.${principal.organizationId}&select=plan,subscription_status,entitlement&limit=1`);
+    const organization = orgRows?.[0];
+    if (!organization || organization.plan === 'trial' || !['active', 'trialing'].includes(organization.subscription_status)) {
+      return res.status(402).json({ error: 'paid_plan_required', plan: organization?.plan ?? 'trial', subscriptionStatus: organization?.subscription_status ?? 'inactive' });
+    }
+
     const body = await readJson(req);
     const mod = await import('../dist/src/index.js');
     const options = {
@@ -29,6 +38,13 @@ export default async function handler(req, res) {
         return { type: 'wait' };
       },
     };
+
+    const evaluationRows = await supabase('/rest/v1/evaluations', {
+      method: 'POST', headers: { Prefer: 'return=representation' },
+      body: { organization_id: principal.organizationId, participant_id: participant.id, status: 'running', request: body },
+    });
+    const evaluation = evaluationRows?.[0];
+
     const result = await mod.runEvaluation({
       runId: String(body.runId ?? `api-${Date.now()}`),
       benchmarkId: 'operational-intelligence.inventory.v1',
@@ -40,7 +56,18 @@ export default async function handler(req, res) {
       verifiers: [new mod.FulfillmentVerifier(), new mod.IntegrityVerifier(), new mod.EfficiencyVerifier()],
       stopWhen: (state) => state.fulfilled >= state.customerDemand,
     });
-    return res.status(200).json(result);
+
+    const units = result.trace.length + result.verifierResults.length * 2 + 2;
+    await meter(principal.organizationId, 'evaluation_units', units, { evaluationId: evaluation?.id, benchmarkId: result.benchmarkId, status: result.status });
+
+    if (evaluation?.id) {
+      await supabase(`/rest/v1/evaluations?id=eq.${evaluation.id}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' },
+        body: { status: result.status, result, evidence_root: result.evidenceRoot, completed_at: new Date().toISOString() },
+      });
+    }
+
+    return res.status(200).json({ evaluationId: evaluation?.id, usageUnits: units, ...result });
   } catch (error) {
     return res.status(400).json({ error: 'evaluation_failed', message: error instanceof Error ? error.message : String(error) });
   }
