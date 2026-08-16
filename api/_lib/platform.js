@@ -101,6 +101,11 @@ export function issueApiKey() {
 export async function principal(req) {
   const token = bearer(req);
   if (!token) return null;
+
+  if (process.env.MEASURE_API_KEY && token === process.env.MEASURE_API_KEY && process.env.MEASURE_INTERNAL_ORG_ID) {
+    return { type: 'internal', organizationId: process.env.MEASURE_INTERNAL_ORG_ID, name: 'Measure internal' };
+  }
+
   if (token.startsWith('ms_live_')) {
     const hash = hashApiKey(token);
     const rows = await supabase(`/rest/v1/api_keys?key_hash=eq.${hash}&revoked_at=is.null&select=id,organization_id,name,prefix&limit=1`);
@@ -131,6 +136,42 @@ export async function meter(organizationId, metric, quantity = 1, metadata = {})
     headers: { Prefer: 'return=minimal' },
     body: { organization_id: organizationId, metric, quantity, metadata },
   });
+}
+
+export const PLAN_ENTITLEMENTS = {
+  trial: { monthlyEvaluationUnits: 0, concurrency: 1, retentionDays: 7 },
+  pro: { monthlyEvaluationUnits: 25_000, concurrency: 3, retentionDays: 30 },
+  team: { monthlyEvaluationUnits: 150_000, concurrency: 10, retentionDays: 90 },
+  scale: { monthlyEvaluationUnits: 1_000_000, concurrency: 50, retentionDays: 365 },
+  private: { monthlyEvaluationUnits: 2_500_000, concurrency: 100, retentionDays: 730, privateRunner: true },
+  enterprise: { monthlyEvaluationUnits: 10_000_000, concurrency: 500, retentionDays: 2555, privateRunner: true, sso: true },
+};
+
+export async function getOrganization(organizationId) {
+  const rows = await supabase(`/rest/v1/organizations?id=eq.${organizationId}&select=*&limit=1`);
+  return rows?.[0] ?? null;
+}
+
+export async function currentMonthlyUnits(organizationId) {
+  const since = new Date();
+  since.setUTCDate(1);
+  since.setUTCHours(0, 0, 0, 0);
+  const rows = await supabase(`/rest/v1/usage_events?organization_id=eq.${organizationId}&created_at=gte.${encodeURIComponent(since.toISOString())}&select=metric,quantity`);
+  return rows.reduce((sum, row) => String(row.metric).includes('units') ? sum + Number(row.quantity ?? 0) : sum, 0);
+}
+
+export async function authorizeUsage(organizationId, requestedUnits = 1, requiredFeature) {
+  const organization = await getOrganization(organizationId);
+  if (!organization) return { allowed: false, reason: 'organization_not_found' };
+  if (organization.plan === 'trial' || !['active', 'trialing'].includes(organization.subscription_status)) {
+    return { allowed: false, reason: 'paid_plan_required', organization };
+  }
+  const entitlement = { ...(PLAN_ENTITLEMENTS[organization.plan] ?? PLAN_ENTITLEMENTS.trial), ...(organization.entitlement ?? {}) };
+  if (requiredFeature && !entitlement[requiredFeature]) return { allowed: false, reason: 'feature_not_entitled', organization, entitlement };
+  const used = await currentMonthlyUnits(organizationId);
+  const limit = Number(entitlement.monthlyEvaluationUnits ?? 0);
+  if (limit > 0 && used + requestedUnits > limit) return { allowed: false, reason: 'monthly_quota_exceeded', organization, entitlement, used, limit };
+  return { allowed: true, organization, entitlement, used, limit, remaining: Math.max(0, limit - used) };
 }
 
 export async function stripeRequest(path, params = {}, method = 'POST') {
@@ -171,12 +212,3 @@ export function verifyStripeSignature(rawBody, header) {
     }
   });
 }
-
-export const PLAN_ENTITLEMENTS = {
-  trial: { monthlyEvaluationUnits: 0, concurrency: 1, retentionDays: 7 },
-  pro: { monthlyEvaluationUnits: 25_000, concurrency: 3, retentionDays: 30 },
-  team: { monthlyEvaluationUnits: 150_000, concurrency: 10, retentionDays: 90 },
-  scale: { monthlyEvaluationUnits: 1_000_000, concurrency: 50, retentionDays: 365 },
-  private: { monthlyEvaluationUnits: 2_500_000, concurrency: 100, retentionDays: 730, privateRunner: true },
-  enterprise: { monthlyEvaluationUnits: 10_000_000, concurrency: 500, retentionDays: 2555, privateRunner: true, sso: true },
-};
