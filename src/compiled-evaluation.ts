@@ -1,4 +1,4 @@
-import type { Participant } from "./contracts.js";
+import type { ParticipantAdapter } from "./contracts.js";
 import type { DomainSpecification } from "./environment-compiler.js";
 import type { ScenarioBlueprint } from "./scenario-synthesis.js";
 import { ExecutableDomainWorld, type ExecutableDomainAction, type ExecutableDomainObservation, type ExecutableDomainState } from "./executable-domain-world.js";
@@ -8,7 +8,7 @@ import { runEvaluation } from "./kernel.js";
 export interface RunCompiledScenarioOptions {
   domain: DomainSpecification;
   scenario: ScenarioBlueprint;
-  participant: Participant<ExecutableDomainObservation, ExecutableDomainAction>;
+  participant: ParticipantAdapter<ExecutableDomainObservation, ExecutableDomainAction>;
   initialEntities?: Record<string, Array<Record<string, unknown>>>;
   maxSteps?: number;
   resourceBudget?: number;
