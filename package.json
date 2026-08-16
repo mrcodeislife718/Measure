@@ -12,9 +12,11 @@
     "check": "npm run build && npm test",
     "test": "node --test dist/test/**/*.test.js",
     "demo": "npm run build && node dist/src/demo.js",
+    "private-runner": "npm run build && node dist/src/private-runner.js",
     "dev": "npx vercel dev",
     "deploy:preview": "npx vercel",
-    "deploy:prod": "npx vercel --prod"
+    "deploy:prod": "npx vercel --prod",
+    "smoke:prod": "node scripts/smoke-production.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
