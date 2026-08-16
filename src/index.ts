@@ -11,6 +11,8 @@ export * from "./distributed-coordinator.js";
 export * from "./environment-compiler.js";
 export * from "./evaluation-session.js";
 export * from "./evidence-ledger.js";
+export * from "./executable-domain-verifiers.js";
+export * from "./executable-domain-world.js";
 export * from "./hardening.js";
 export * from "./hash.js";
 export * from "./internal-affairs.js";
