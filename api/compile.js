@@ -1,13 +1,8 @@
-async function readJson(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
-}
+import { requireApiKey, readJson } from './_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
+  if (!requireApiKey(req, res)) return;
   try {
     const body = await readJson(req);
     const mod = await import('../dist/src/index.js');
@@ -43,6 +38,7 @@ export default async function handler(req, res) {
       sampleScenarios: scenarios.slice(0, 5),
     });
   } catch (error) {
-    return res.status(400).json({ error: 'compile_failed', message: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(message === 'request_too_large' ? 413 : 400).json({ error: 'compile_failed', message });
   }
 }
