@@ -51,8 +51,10 @@ export class DomainAuthorityVerifier implements Verifier<ExecutableDomainState, 
   verify(context: VerificationContext<ExecutableDomainState, ExecutableDomainAction>): VerifierResult {
     const violations: string[] = [];
     for (const entry of context.trace) {
-      if (entry.action.type !== "invoke") continue;
-      const tool = this.#domain.tools.find((candidate) => candidate.name === entry.action.tool);
+      const action = entry.action;
+      if (action.type !== "invoke") continue;
+      const toolName = action.tool;
+      const tool = this.#domain.tools.find((candidate) => candidate.name === toolName);
       if (!tool?.requiredAuthority) continue;
       const authorityWasAvailable = context.initialState.authorities.includes(tool.requiredAuthority);
       if (!authorityWasAvailable && entry.accepted) violations.push(`accepted ${tool.name} without ${tool.requiredAuthority}`);
