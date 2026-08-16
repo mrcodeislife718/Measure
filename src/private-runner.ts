@@ -53,7 +53,7 @@ export async function runPrivateJob(job: PrivateRunnerJob): Promise<PrivateRunne
   if (!scenarios.length) throw new Error("compiled domain produced no scenarios");
 
   const participant = job.participant.type === "http"
-    ? new HttpParticipant<ExecutableDomainObservation, ExecutableDomainAction>(job.participant)
+    ? new HttpParticipant<ExecutableDomainObservation, ExecutableDomainAction>({ ...job.participant, allowPrivateNetwork: true })
     : new CommandParticipant<ExecutableDomainObservation, ExecutableDomainAction>(job.participant);
 
   const report = await runCompiledScenarioFamily({
