@@ -67,9 +67,47 @@ export async function publicSupabase(path, options = {}) {
   return data;
 }
 
+export function parseCookies(req) {
+  const raw = String(req.headers.cookie ?? '');
+  const cookies = {};
+  for (const segment of raw.split(';')) {
+    const index = segment.indexOf('=');
+    if (index <= 0) continue;
+    const name = segment.slice(0, index).trim();
+    const value = segment.slice(index + 1).trim();
+    try { cookies[name] = decodeURIComponent(value); } catch { cookies[name] = value; }
+  }
+  return cookies;
+}
+
+function cookie(name, value, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') parts.push('Secure');
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge))}`);
+  return parts.join('; ');
+}
+
+export function setSessionCookies(res, session) {
+  const accessMaxAge = Math.max(60, Number(session.expires_in ?? 3600));
+  const refreshMaxAge = 60 * 60 * 24 * 30;
+  res.setHeader('Set-Cookie', [
+    cookie('measure_access', session.access_token, { maxAge: accessMaxAge }),
+    cookie('measure_refresh', session.refresh_token, { maxAge: refreshMaxAge }),
+  ]);
+}
+
+export function clearSessionCookies(res) {
+  res.setHeader('Set-Cookie', [cookie('measure_access', '', { maxAge: 0 }), cookie('measure_refresh', '', { maxAge: 0 })]);
+}
+
 export function bearer(req) {
   const value = String(req.headers.authorization ?? '');
-  return value.startsWith('Bearer ') ? value.slice(7).trim() : '';
+  if (value.startsWith('Bearer ')) return value.slice(7).trim();
+  return parseCookies(req).measure_access ?? '';
+}
+
+export function refreshToken(req) {
+  return parseCookies(req).measure_refresh ?? '';
 }
 
 export async function userFromToken(token) {
@@ -128,6 +166,34 @@ export async function requirePrincipal(req, res) {
     return null;
   }
   return p;
+}
+
+function remoteAddress(req) {
+  return String(req.headers['x-forwarded-for'] ?? req.socket?.remoteAddress ?? 'unknown').split(',')[0].trim();
+}
+
+export async function rateLimit(req, scope, options = {}) {
+  const limit = Math.max(1, Number(options.limit ?? 20));
+  const windowSeconds = Math.max(1, Number(options.windowSeconds ?? 60));
+  const identity = options.identity ?? remoteAddress(req);
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
+  const keyHash = createHash('sha256').update(`${scope}:${identity}:${bucket}`).digest('hex');
+  const rows = await supabase('/rest/v1/rpc/measure_consume_rate_limit', {
+    method: 'POST',
+    body: { p_key_hash: keyHash, p_scope: scope, p_limit: limit, p_window_seconds: windowSeconds },
+  });
+  const record = Array.isArray(rows) ? rows[0] : rows;
+  return { allowed: Boolean(record?.allowed ?? record === true), remaining: Number(record?.remaining ?? 0), resetAt: record?.reset_at };
+}
+
+export async function requireRateLimit(req, res, scope, options = {}) {
+  const result = await rateLimit(req, scope, options);
+  if (!result.allowed) {
+    res.setHeader('Retry-After', String(options.windowSeconds ?? 60));
+    res.status(429).json({ error: 'rate_limited', scope });
+    return false;
+  }
+  return true;
 }
 
 export async function meter(organizationId, metric, quantity = 1, metadata = {}) {
