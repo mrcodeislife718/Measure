@@ -5,6 +5,7 @@ import { compileRepositoryManifest, compileTrace, type RepositoryManifest, type 
 import { synthesizeScenarioFamily } from "./scenario-synthesis.js";
 import { CommandParticipant, HttpParticipant } from "./participant-adapters.js";
 import { runCompiledScenarioFamily } from "./compiled-evaluation.js";
+import type { ExecutableDomainAction, ExecutableDomainObservation } from "./executable-domain-world.js";
 
 export interface PrivateRunnerJob {
   jobId: string;
@@ -52,8 +53,8 @@ export async function runPrivateJob(job: PrivateRunnerJob): Promise<PrivateRunne
   if (!scenarios.length) throw new Error("compiled domain produced no scenarios");
 
   const participant = job.participant.type === "http"
-    ? new HttpParticipant(job.participant)
-    : new CommandParticipant(job.participant);
+    ? new HttpParticipant<ExecutableDomainObservation, ExecutableDomainAction>(job.participant)
+    : new CommandParticipant<ExecutableDomainObservation, ExecutableDomainAction>(job.participant);
 
   const report = await runCompiledScenarioFamily({
     domain,
