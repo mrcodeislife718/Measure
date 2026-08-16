@@ -11,17 +11,10 @@ button?.addEventListener('click', async () => {
     return;
   }
   try {
-    const response = await fetch('/api/compile', {
+    const response = await fetch('/api/demo-compile', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'workflow',
-        source: {
-          id: 'public-demo',
-          states,
-          transitions: [{ from: states[0], to: states[states.length - 1], action, authority: authority || undefined }],
-        },
-      }),
+      body: JSON.stringify({ states, action, authority }),
     });
     const payload = await response.json();
     result.textContent = JSON.stringify(payload, null, 2);
