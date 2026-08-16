@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Measure Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="nav">
+      <a class="brand" href="/">Measure</a>
+      <div class="nav-actions"><button id="logout" class="button ghost" hidden>Log out</button></div>
+    </header>
+
+    <section id="auth-card" class="panel">
+      <p class="eyebrow">CUSTOMER ACCESS</p>
+      <h1>Sign in to Measure</h1>
+      <p>Manage your plan, API keys, usage, and evaluation history.</p>
+      <div class="grid two">
+        <form id="login-form" class="stack">
+          <h3>Sign in</h3>
+          <input name="email" type="email" placeholder="Email" required />
+          <input name="password" type="password" placeholder="Password" required />
+          <button class="button" type="submit">Sign in</button>
+        </form>
+        <form id="register-form" class="stack">
+          <h3>Create account</h3>
+          <input name="organizationName" placeholder="Company / workspace" />
+          <input name="email" type="email" placeholder="Email" required />
+          <input name="password" type="password" placeholder="Password (10+ characters)" minlength="10" required />
+          <button class="button secondary" type="submit">Create account</button>
+        </form>
+      </div>
+      <pre id="auth-message" class="result"></pre>
+    </section>
+
+    <section id="dashboard" hidden>
+      <section class="hero compact">
+        <p class="eyebrow">OPERATIONAL TRUST CONTROL PLANE</p>
+        <h1 id="org-name">Measure</h1>
+        <p id="plan-line">Loading account...</p>
+        <div class="actions">
+          <button class="button" data-plan="pro">Pro — $249/mo</button>
+          <button class="button" data-plan="team">Team — $749/mo</button>
+          <button class="button" data-plan="scale">Scale — $2,500/mo</button>
+          <button class="button secondary" id="billing">Manage billing</button>
+        </div>
+      </section>
+
+      <section class="grid three">
+        <article class="panel"><p class="eyebrow">PLAN</p><h3 id="plan">—</h3><p id="subscription">—</p></article>
+        <article class="panel"><p class="eyebrow">EVALUATION UNITS</p><h3 id="usage-total">0</h3><p>Current month</p></article>
+        <article class="panel"><p class="eyebrow">ACCESS</p><h3 id="concurrency">—</h3><p>Concurrent evaluations</p></article>
+      </section>
+
+      <section class="grid two">
+        <article class="panel">
+          <p class="eyebrow">API KEYS</p>
+          <h2>Programmatic access</h2>
+          <form id="key-form" class="actions"><input id="key-name" placeholder="Key name" value="Production"/><button class="button" type="submit">Create key</button></form>
+          <pre id="new-key" class="result"></pre>
+          <div id="keys"></div>
+        </article>
+        <article class="panel">
+          <p class="eyebrow">QUICK START</p>
+          <h2>Run an evaluation</h2>
+          <pre class="result">curl -X POST "$MEASURE_URL/api/evaluate" \
+  -H "Authorization: Bearer $MEASURE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"participantId":"my-system"}'</pre>
+        </article>
+      </section>
+
+      <section class="panel">
+        <p class="eyebrow">USAGE</p>
+        <h2>This month</h2>
+        <pre id="usage" class="result">Loading...</pre>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="/dashboard.js"></script>
+</body>
+</html>
