@@ -1,15 +1,12 @@
-import { meter, readJson, requirePrincipal, supabase } from './_lib/platform.js';
+import { authorizeUsage, meter, readJson, requirePrincipal } from './_lib/platform.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
   try {
     const principal = await requirePrincipal(req, res);
     if (!principal) return;
-    const orgRows = await supabase(`/rest/v1/organizations?id=eq.${principal.organizationId}&select=plan,subscription_status&limit=1`);
-    const organization = orgRows?.[0];
-    if (!organization || organization.plan === 'trial' || !['active', 'trialing'].includes(organization.subscription_status)) {
-      return res.status(402).json({ error: 'paid_plan_required' });
-    }
+    const quota = await authorizeUsage(principal.organizationId, 10);
+    if (!quota.allowed) return res.status(quota.reason === 'monthly_quota_exceeded' ? 429 : 402).json({ error: quota.reason, used: quota.used, limit: quota.limit });
 
     const body = await readJson(req);
     const mod = await import('../dist/src/index.js');
@@ -44,6 +41,7 @@ export default async function handler(req, res) {
         reviewRequired: domain.reviewRequired,
       },
       usageUnits: units,
+      quota: { usedBefore: quota.used, limit: quota.limit },
       generatedScenarios: scenarios.length,
       hiddenScenarios: scenarios.filter((scenario) => scenario.hidden).length,
       sampleScenarios: scenarios.slice(0, 5),
