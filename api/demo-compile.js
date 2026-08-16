@@ -1,8 +1,9 @@
-import { readJson } from './_lib/platform.js';
+import { readJson, requireRateLimit } from './_lib/platform.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
   try {
+    if (!await requireRateLimit(req, res, 'demo.compile', { limit: 20, windowSeconds: 3600 })) return;
     const body = await readJson(req, 32_000);
     const states = Array.isArray(body.states) ? body.states.map(String).map((value) => value.trim()).filter(Boolean).slice(0, 8) : [];
     const action = String(body.action ?? '').trim().slice(0, 80);
