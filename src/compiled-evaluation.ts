@@ -54,7 +54,7 @@ export async function runCompiledScenarioFamily(options: Omit<RunCompiledScenari
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
     }, {}),
-    meanConfidence: results.length ? results.reduce((sum, item) => sum + item.confidence.overall, 0) / results.length : 0,
+    meanConfidence: results.length ? results.reduce((sum, item) => sum + item.confidence.overallConfidence, 0) / results.length : 0,
     evidenceRoots: results.map((item) => item.evidenceRoot),
     results,
   };
