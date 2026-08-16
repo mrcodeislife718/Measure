@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "npm run build && npm test",
+    "check:runtime": "find api public scripts -type f \\( -name '*.js' -o -name '*.mjs' \\) -print0 | xargs -0 -n1 node --check",
+    "check": "npm run check:runtime && npm run build && npm test",
     "test": "node --test dist/test/**/*.test.js",
     "demo": "npm run build && node dist/src/demo.js",
     "private-runner": "npm run build && node dist/src/private-runner.js",
