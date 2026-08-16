@@ -22,12 +22,16 @@ function saveSession(session) {
   if (session.refreshToken) localStorage.setItem(REFRESH_KEY, session.refreshToken);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+}
+
 async function loadDashboard() {
   if (!token()) {
     authCard.hidden = false; dashboard.hidden = true; logout.hidden = true; return;
   }
   try {
-    const [account, usage, keys] = await Promise.all([api('/api/account'), api('/api/usage'), api('/api/keys')]);
+    const [account, usage, keys, history] = await Promise.all([api('/api/account'), api('/api/usage'), api('/api/keys'), api('/api/evaluations?limit=20')]);
     authCard.hidden = true; dashboard.hidden = false; logout.hidden = false;
     document.querySelector('#org-name').textContent = account.organization.name;
     document.querySelector('#plan').textContent = account.organization.plan.toUpperCase();
@@ -38,7 +42,8 @@ async function loadDashboard() {
     const unitTotal = Object.entries(totals).filter(([key]) => key.includes('units')).reduce((sum, [, value]) => sum + Number(value || 0), 0);
     document.querySelector('#usage-total').textContent = unitTotal.toLocaleString();
     document.querySelector('#usage').textContent = JSON.stringify(totals, null, 2);
-    document.querySelector('#keys').innerHTML = (keys.keys || []).map((key) => `<div class="key-row"><code>${key.prefix}…</code><span>${key.name}</span><span>${key.revoked_at ? 'revoked' : (key.last_used_at ? 'used' : 'new')}</span></div>`).join('') || '<p>No API keys yet.</p>';
+    document.querySelector('#keys').innerHTML = (keys.keys || []).map((key) => `<div class="key-row"><code>${escapeHtml(key.prefix)}…</code><span>${escapeHtml(key.name)}</span><span>${key.revoked_at ? 'revoked' : (key.last_used_at ? 'used' : 'new')}</span></div>`).join('') || '<p>No API keys yet.</p>';
+    document.querySelector('#evaluations').innerHTML = (history.evaluations || []).map((item) => `<div class="key-row"><code>${escapeHtml(item.participant_id)}</code><strong>${escapeHtml(item.status)}</strong><span>${escapeHtml(new Date(item.created_at).toLocaleString())}</span></div>`).join('') || '<p>No evaluations yet.</p>';
   } catch (error) {
     localStorage.removeItem(TOKEN_KEY);
     authMessage.textContent = error.message;
