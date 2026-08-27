@@ -1,4 +1,5 @@
 import { PLAN_ENTITLEMENTS, readRaw, supabase, verifyStripeSignature } from '../_lib/platform.js';
+import { recordEconomicEvent } from '../_lib/economics.js';
 
 function planFromPrice(priceId) {
   const pairs = [
@@ -40,6 +41,9 @@ export default async function handler(req, res) {
           method: 'PATCH', headers: { Prefer: 'return=minimal' },
           body: { status: 'paid', stripe_payment_intent_id: object.payment_intent ?? null, updated_at: new Date().toISOString() },
         });
+        if (organizationId) {
+          await recordEconomicEvent(organizationId, 'paid_evaluation', { externalRef: object.id, metadata: { source: 'trust_audit_checkout' } });
+        }
       } else if (organizationId) {
         await patchOrg(organizationId, {
           stripe_customer_id: object.customer ?? null,
@@ -48,6 +52,7 @@ export default async function handler(req, res) {
           plan,
           entitlement: PLAN_ENTITLEMENTS[plan] ?? {},
         });
+        await recordEconomicEvent(organizationId, 'paid_customer', { externalRef: object.customer ?? object.id, metadata: { plan, source: 'checkout' } });
       }
     }
 
@@ -63,12 +68,22 @@ export default async function handler(req, res) {
           plan: inactive ? 'trial' : plan,
           entitlement: inactive ? PLAN_ENTITLEMENTS.trial : (PLAN_ENTITLEMENTS[plan] ?? organization.entitlement ?? {}),
         });
+        if (!inactive && ['active', 'trialing'].includes(object.status)) {
+          await recordEconomicEvent(organization.id, 'paid_customer', { externalRef: object.customer ?? object.id, metadata: { plan, source: event.type } });
+        }
       }
     }
 
     if (event.type === 'invoice.payment_failed' || event.type === 'invoice.paid') {
       const organization = await orgByCustomer(object.customer);
-      if (organization) await patchOrg(organization.id, { subscription_status: event.type === 'invoice.paid' ? 'active' : 'past_due' });
+      if (organization) {
+        await patchOrg(organization.id, { subscription_status: event.type === 'invoice.paid' ? 'active' : 'past_due' });
+        if (event.type === 'invoice.paid') {
+          const amountUsd = Math.max(0, Number(object.amount_paid ?? 0)) / 100;
+          await recordEconomicEvent(organization.id, 'revenue', { valueUsd: amountUsd, externalRef: object.id, metadata: { source: 'stripe_invoice' } });
+          await recordEconomicEvent(organization.id, 'retained_customer', { externalRef: `${object.customer}:${object.id}`, metadata: { source: 'invoice_paid' } });
+        }
+      }
     }
 
     await supabase('/rest/v1/billing_events', {
