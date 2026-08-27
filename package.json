@@ -14,6 +14,7 @@
     "test": "node --test dist/test/**/*.test.js",
     "demo": "npm run build && node dist/src/demo.js",
     "private-runner": "npm run build && node dist/src/private-runner.js",
+    "repro:package": "node scripts/build-reproduction-package.mjs",
     "dev": "npx vercel dev",
     "deploy:preview": "npx vercel",
     "deploy:prod": "npx vercel --prod",
