@@ -75,7 +75,14 @@ export default async function handler(req, res) {
       const scope = String(body.scope ?? 'Founding Measure Trust Audit').trim().slice(0, 4000);
       await supabase('/rest/v1/trust_audits', {
         method: 'POST', headers: { Prefer: 'return=minimal' },
-        body: { organization_id: organizationId ?? null, contact_email: email, system_name: systemName, scope, stripe_checkout_session_id: session.id },
+        body: {
+          organization_id: organizationId ?? null,
+          contact_email: email,
+          system_name: systemName,
+          scope,
+          stripe_checkout_session_id: session.id,
+          stripe_payment_intent_id: session.payment_intent ?? null,
+        },
       });
     }
 
