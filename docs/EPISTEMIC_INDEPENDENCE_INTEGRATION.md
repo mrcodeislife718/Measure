@@ -1,55 +1,83 @@
-# Epistemic Independence Accounting integration
+# Epistemic Independence Accounting in Measure
 
-Measure consumes **Epistemic Independence Accounting (EIA)** as verification evidence.
+Measure implements **Epistemic Independence Accounting (EIA)** as a native evaluation capability.
 
-Ownership remains explicit:
+Measure does not require Forensicly, or any other repository, to determine whether corroborating evaluation evidence is genuinely independent.
 
-- **Forensicly owns EIA**: source genealogy, lineage discovery, derivation relationships, shared-root detection, false-multiplicity detection, and computation of epistemic independence.
-- **Measure consumes EIA**: it uses an EIA report when deciding whether corroboration is sufficiently independent to support a `verified` evaluation claim.
+The governing invariant is:
 
-Measure does not copy Forensicly's evidence-genealogy engine. The boundary is a portable evidence contract implemented in `src/epistemic-independence.ts`.
+> Do not count agents, reports, citations, verifier outputs, or repeated observations as independent merely because they are numerically distinct. Count genuinely independent evidence roots and account for shared dependencies.
 
-## Invariant
+## Measure ownership boundary
 
-> Do not count agents, reports, citations, or verifier outputs as independent merely because they are numerically distinct. Count genuinely independent evidence roots.
+Within Measure, EIA exists solely to answer an evaluation question:
 
-Multiple downstream artifacts derived from one root source are correlated evidence, not multiple independent confirmations.
+**Does this evaluation have enough genuinely independent corroboration to justify its requested verification status?**
+
+Measure therefore owns its own:
+
+- evidence-path records;
+- root-lineage identifiers;
+- dependency identifiers;
+- false-multiplicity detection;
+- independence scoring;
+- verification policy;
+- publication-status qualification.
+
+No external service or repository is required for these decisions.
+
+## Native data flow
+
+```text
+Measure evaluation evidence
+    |
+    v
+Evidence paths
+    |
+    +--> root lineage accounting
+    +--> shared dependency accounting
+    +--> false multiplicity detection
+    |
+    v
+Epistemic independence score
+    |
+    v
+Verification policy
+    |
+    v
+verified / qualified / inconclusive / invalid
+```
 
 ## Verification behavior
 
-An EIA report includes:
+Each `EpistemicEvidencePath` records a Measure evidence item together with the root lineages and dependencies that produced it.
 
-- producer identity;
-- claim identity;
-- number of evidence paths;
-- unique root-lineage identities;
-- independence score;
-- false-multiplicity detection;
-- optional lineage digest and notes.
+Measure computes:
 
-Measure validates the report against a publication policy. By default, evidence presented as independent corroboration must have at least two unique root lineages, an independence score of at least `0.6`, and no detected false multiplicity.
+- evidence-path count;
+- unique root-lineage count;
+- repeated roots;
+- shared dependencies;
+- false multiplicity;
+- an independence score;
+- policy-blocking reasons and warnings.
 
-If a claim requests `verified` status but its EIA evidence fails policy, Measure downgrades the claim to `qualified`. It does not silently convert duplicated or derivative evidence into confidence.
+By default, evidence presented as independent corroboration must have at least two independent roots, an independence score of at least `0.6`, and no detected false multiplicity.
 
-EIA is additive to Measure's existing controls. Passing EIA does not replace deterministic verifiers, replay, replication, benchmark validity, contamination checks, statistical confidence, Internal Affairs, or constitutional publication gates.
+If a claim requests `verified` status but the evidence fails this policy, Measure downgrades the claim to `qualified` rather than allowing duplicated or correlated evidence to inflate confidence.
 
-## Data flow
+## Relationship to verifier independence
 
-```text
-Evaluation evidence
-    |
-    +--> Forensicly
-    |      -> genealogy
-    |      -> root lineages
-    |      -> dependency analysis
-    |      -> false-multiplicity detection
-    |      -> EIA report
-    |
-    +--> Measure
-           -> validate EIA contract
-           -> apply epistemic-independence policy
-           -> combine with verifier/replay/audit evidence
-           -> qualify publication status
-```
+Epistemic independence and verifier independence are complementary but separate.
 
-The intended result is simple: five agreeing outputs descended from one underlying source do not become five independent pieces of evidence merely because five components repeated them.
+**Verifier independence** asks whether verification mechanisms share implementations, models, providers, datasets, state sources, or toolchains.
+
+**Epistemic independence** asks whether the underlying evidence itself comes from genuinely independent roots and dependencies.
+
+A verifier can be technically independent while still validating several artifacts that all descend from the same original evidence. Measure checks both layers independently.
+
+## Independence from other projects
+
+Other projects may independently implement similar evidence-genealogy or provenance ideas, but Measure does not import their code, require their runtime, or depend on their availability.
+
+Interoperability may be added later through optional adapters, but any such adapter must remain optional. Measure's core evaluation and verification path must continue to operate fully on its own.
