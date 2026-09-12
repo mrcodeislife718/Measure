@@ -1,33 +1,32 @@
 import type { ClaimStatus } from "./contracts.js";
 
 /**
- * The portable contract Measure accepts from an Epistemic Independence Accounting
- * producer such as Forensicly. Forensicly owns lineage discovery and independence
- * analysis; Measure consumes the resulting evidence when qualifying verification.
+ * Measure-native evidence path used for epistemic independence accounting.
+ * Measure computes independence from its own evaluation evidence and does not
+ * require any external repository or service.
  */
-export interface EpistemicIndependenceEvidence {
-  schemaVersion: "1";
-  producer: string;
-  claimId: string;
-  evidencePathCount: number;
-  uniqueRootLineageIds: string[];
-  independenceScore: number;
-  falseMultiplicityDetected: boolean;
-  lineageDigest?: string;
-  notes?: string[];
+export interface EpistemicEvidencePath {
+  evidenceId: string;
+  rootLineageIds: string[];
+  dependencyIds?: string[];
+  channel?: string;
+  executionId?: string;
 }
 
 export interface EpistemicVerificationPolicy {
   minimumIndependentRoots: number;
   minimumIndependenceScore: number;
   rejectFalseMultiplicity: boolean;
-  requireLineageDigest: boolean;
 }
 
 export interface EpistemicVerificationAssessment {
   acceptedAsIndependentEvidence: boolean;
+  evidencePathCount: number;
   independentRootCount: number;
+  uniqueRootLineageIds: string[];
   independenceScore: number;
+  falseMultiplicityDetected: boolean;
+  sharedDependencies: string[];
   blockedReasons: string[];
   warnings: string[];
 }
@@ -43,78 +42,99 @@ export const DEFAULT_EPISTEMIC_VERIFICATION_POLICY: Readonly<EpistemicVerificati
   minimumIndependentRoots: 2,
   minimumIndependenceScore: 0.6,
   rejectFalseMultiplicity: true,
-  requireLineageDigest: false,
 });
 
-function finiteUnitInterval(value: number): boolean {
-  return Number.isFinite(value) && value >= 0 && value <= 1;
+function normalized(values: string[] = []): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
 }
 
 /**
- * Validate and interpret external EIA evidence without reimplementing Forensicly's
- * genealogy engine. Measure intentionally treats the report as verification evidence,
- * not as a substitute for its own verifier execution, replay, audits, or controls.
+ * Compute epistemic independence directly from Measure's own evidence paths.
+ * Distinct records are not assumed to be independent: shared roots and shared
+ * dependencies reduce effective corroboration and can trigger false multiplicity.
  */
-export function assessEpistemicVerificationEvidence(
-  evidence: EpistemicIndependenceEvidence,
+export function assessEpistemicIndependence(
+  paths: EpistemicEvidencePath[],
   policy: EpistemicVerificationPolicy = DEFAULT_EPISTEMIC_VERIFICATION_POLICY,
 ): EpistemicVerificationAssessment {
   const blockedReasons: string[] = [];
   const warnings: string[] = [];
 
-  const roots = [...new Set(evidence.uniqueRootLineageIds.filter((id) => id.trim().length > 0))];
+  const validPaths = paths.filter((path) => path.evidenceId.trim().length > 0);
+  if (validPaths.length !== paths.length) blockedReasons.push("missing-evidence-id");
 
-  if (evidence.schemaVersion !== "1") blockedReasons.push("unsupported-eia-schema");
-  if (!evidence.producer.trim()) blockedReasons.push("missing-eia-producer");
-  if (!evidence.claimId.trim()) blockedReasons.push("missing-eia-claim-id");
-  if (!Number.isInteger(evidence.evidencePathCount) || evidence.evidencePathCount < 0) blockedReasons.push("invalid-evidence-path-count");
-  if (!finiteUnitInterval(evidence.independenceScore)) blockedReasons.push("invalid-independence-score");
-  if (roots.length > evidence.evidencePathCount) blockedReasons.push("root-count-exceeds-evidence-path-count");
+  const rootsByPath = validPaths.map((path) => normalized(path.rootLineageIds));
+  if (rootsByPath.some((roots) => roots.length === 0)) blockedReasons.push("missing-root-lineage");
 
-  if (policy.rejectFalseMultiplicity && evidence.falseMultiplicityDetected) {
+  const uniqueRootLineageIds = normalized(rootsByPath.flat());
+
+  const rootUse = new Map<string, number>();
+  for (const roots of rootsByPath) {
+    for (const root of roots) rootUse.set(root, (rootUse.get(root) ?? 0) + 1);
+  }
+  const repeatedRoots = [...rootUse.entries()].filter(([, count]) => count > 1).map(([root]) => root).sort();
+
+  const dependencyUse = new Map<string, number>();
+  for (const path of validPaths) {
+    for (const dependency of normalized(path.dependencyIds)) {
+      dependencyUse.set(dependency, (dependencyUse.get(dependency) ?? 0) + 1);
+    }
+  }
+  const sharedDependencies = [...dependencyUse.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([dependency]) => dependency)
+    .sort();
+
+  const pathCount = validPaths.length;
+  const rootRatio = pathCount === 0 ? 0 : Math.min(1, uniqueRootLineageIds.length / pathCount);
+  const dependencyPenalty = pathCount <= 1 ? 0 : Math.min(0.5, sharedDependencies.length / (pathCount * 2));
+  const independenceScore = Number(Math.max(0, rootRatio - dependencyPenalty).toFixed(4));
+
+  const falseMultiplicityDetected = pathCount > 1 && (
+    uniqueRootLineageIds.length < pathCount || repeatedRoots.length > 0 || sharedDependencies.length > 0
+  );
+
+  if (policy.rejectFalseMultiplicity && falseMultiplicityDetected) {
     blockedReasons.push("false-multiplicity-detected");
-  } else if (evidence.falseMultiplicityDetected) {
+  } else if (falseMultiplicityDetected) {
     warnings.push("false-multiplicity-detected");
   }
 
-  if (roots.length < policy.minimumIndependentRoots) {
-    blockedReasons.push(`insufficient-independent-roots:${roots.length}<${policy.minimumIndependentRoots}`);
+  if (uniqueRootLineageIds.length < policy.minimumIndependentRoots) {
+    blockedReasons.push(`insufficient-independent-roots:${uniqueRootLineageIds.length}<${policy.minimumIndependentRoots}`);
   }
 
-  if (finiteUnitInterval(evidence.independenceScore) && evidence.independenceScore < policy.minimumIndependenceScore) {
-    blockedReasons.push(`independence-score-below-threshold:${evidence.independenceScore}<${policy.minimumIndependenceScore}`);
+  if (independenceScore < policy.minimumIndependenceScore) {
+    blockedReasons.push(`independence-score-below-threshold:${independenceScore}<${policy.minimumIndependenceScore}`);
   }
 
-  if (policy.requireLineageDigest && !evidence.lineageDigest?.trim()) {
-    blockedReasons.push("missing-lineage-digest");
-  } else if (!evidence.lineageDigest?.trim()) {
-    warnings.push("lineage-digest-not-provided");
-  }
-
-  if (evidence.evidencePathCount > 0 && roots.length === 1 && evidence.evidencePathCount > 1) {
-    warnings.push("multiple-evidence-paths-share-one-root-lineage");
-  }
+  if (repeatedRoots.length > 0) warnings.push(`shared-root-lineages:${repeatedRoots.join(",")}`);
+  if (sharedDependencies.length > 0) warnings.push(`shared-dependencies:${sharedDependencies.join(",")}`);
 
   return {
     acceptedAsIndependentEvidence: blockedReasons.length === 0,
-    independentRootCount: roots.length,
-    independenceScore: finiteUnitInterval(evidence.independenceScore) ? evidence.independenceScore : 0,
+    evidencePathCount: pathCount,
+    independentRootCount: uniqueRootLineageIds.length,
+    uniqueRootLineageIds,
+    independenceScore,
+    falseMultiplicityDetected,
+    sharedDependencies,
     blockedReasons,
     warnings,
   };
 }
 
 /**
- * Apply EIA to a claim status. A claim cannot remain `verified` when the evidence
- * presented as corroboration is not epistemically independent. Measure downgrades
- * rather than silently inflating confidence from duplicated or derivative evidence.
+ * Apply Measure's native epistemic-independence result to publication status.
+ * A requested `verified` status is downgraded when corroboration is not truly
+ * independent rather than allowing duplicated evidence to inflate confidence.
  */
 export function qualifyVerificationWithEia(
   requestedStatus: ClaimStatus,
-  evidence: EpistemicIndependenceEvidence,
+  paths: EpistemicEvidencePath[],
   policy: EpistemicVerificationPolicy = DEFAULT_EPISTEMIC_VERIFICATION_POLICY,
 ): VerificationQualification {
-  const epistemic = assessEpistemicVerificationEvidence(evidence, policy);
+  const epistemic = assessEpistemicIndependence(paths, policy);
   const reasons = [...epistemic.blockedReasons, ...epistemic.warnings];
 
   if (requestedStatus === "verified" && !epistemic.acceptedAsIndependentEvidence) {
