@@ -11,6 +11,7 @@ export * from "./contracts.js";
 export * from "./counterexample.js";
 export * from "./distributed-coordinator.js";
 export * from "./environment-compiler.js";
+export * from "./epistemic-independence.js";
 export * from "./evaluation-session.js";
 export * from "./evidence-ledger.js";
 export * from "./executable-domain-verifiers.js";
